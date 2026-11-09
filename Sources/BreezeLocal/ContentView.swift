@@ -1291,9 +1291,41 @@ struct SettingsSheet: View {
                     GhostButton(title: combo.isDisabled ? "已关闭" : "关闭", height: 26) { applyCombo(.disabled) }
                     Spacer()
                 }
-                Text(hotKeyHint)
+                HStack(spacing: 6) {
+                    Text(hotKeyHint)
+                        .font(.system(size: 9))
+                        .foregroundStyle(hotKeyError == nil ? Color.secondary : Color.red)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 4)
+                    GhostButton(title: "刷新系统服务", height: 22) {
+                        NSUpdateDynamicServices()
+                    }
+                    .help("右键“服务”菜单里没有「用 BreezeLocal 朗读」时点一下")
+                }
+            }
+
+            section("输出格式") {
+                HStack(spacing: 6) {
+                    ForEach(["wav", "mp3", "ogg"], id: \.self) { format in
+                        Button { state.exportFormat = format } label: {
+                            Text(format.uppercased())
+                                .font(.system(size: 10.5, weight: .medium, design: .monospaced))
+                                .foregroundStyle(state.exportFormat == format ? Color.white : Color.primary)
+                                .padding(.horizontal, 12).frame(height: 24)
+                                .background(
+                                    Capsule().fill(state.exportFormat == format
+                                                   ? AnyShapeStyle(Palette.accentGradient)
+                                                   : AnyShapeStyle(Color.primary.opacity(0.06)))
+                                )
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    Spacer()
+                }
+                Text("默认 WAV（无损、可 App 内试听）；MP3 兼容性最好；OGG 体积最小，但 App 内不能试听，会用系统播放器打开。")
                     .font(.system(size: 9))
-                    .foregroundStyle(hotKeyError == nil ? Color.secondary : Color.red)
+                    .foregroundStyle(.tertiary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
 
             section("维护") {

@@ -353,6 +353,21 @@ def import_model(source: str, data_dir: Path, name: str | None) -> None:
     emit({"type": "done", "model": record})
 
 
+def convert_audio(src: Path, dst: Path, fmt: str) -> None:
+    """把 24k 单声道 WAV 转成 mp3 / ogg（依赖 libsndfile 1.2+）。"""
+    import soundfile as sf
+
+    data, sr = sf.read(str(src), dtype="float32", always_2d=False)
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    if fmt == "mp3":
+        sf.write(str(dst), data, sr, format="MP3")
+    elif fmt == "ogg":
+        sf.write(str(dst), data, sr, format="OGG", subtype="VORBIS")
+    else:
+        raise fail(f"不支持的格式：{fmt}")
+    emit({"type": "done", "result": {"path": str(dst), "format": fmt, "bytes": dst.stat().st_size}})
+
+
 def clean_cache(data_dir: Path) -> None:
     ensure_layout(data_dir)
     freed = 0
@@ -762,6 +777,12 @@ def parser() -> argparse.ArgumentParser:
     download.add_argument("--channel", choices=["hf", "mirror", "modelscope"], default="hf")
     download.add_argument("--data-dir", default=str(DEFAULT_DATA_DIR))
 
+    convert = sub.add_parser("convert")
+    convert.add_argument("--in", dest="src", required=True)
+    convert.add_argument("--out", dest="dst", required=True)
+    convert.add_argument("--format", choices=["mp3", "ogg"], required=True)
+    convert.add_argument("--data-dir", default=str(DEFAULT_DATA_DIR))
+
     remove = sub.add_parser("remove")
     remove.add_argument("--model", required=True)
     remove.add_argument("--data-dir", default=str(DEFAULT_DATA_DIR))
@@ -816,6 +837,8 @@ def main() -> int:
             check(args, data_dir)
         elif args.command == "speak":
             speak(args, data_dir)
+        elif args.command == "convert":
+            convert_audio(Path(args.src).expanduser(), Path(args.dst).expanduser(), args.format)
         elif args.command == "clean-cache":
             clean_cache(data_dir)
         elif args.command == "serve":

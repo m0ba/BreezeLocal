@@ -73,6 +73,9 @@ final class AppState: ObservableObject {
     // MARK: - 音色
 
     @Published var customVoices: [VoiceRecord] = []
+    @Published var exportFormat: String = UserDefaults.standard.string(forKey: "BreezeLocal.exportFormat") ?? "wav" {
+        didSet { UserDefaults.standard.set(exportFormat, forKey: "BreezeLocal.exportFormat") }
+    }
     @Published var showVoiceSheet = false
     @Published var showCloneSheet = false
 
@@ -106,6 +109,10 @@ final class AppState: ObservableObject {
             )
         }
         loadVoices()
+        if let override = ProcessInfo.processInfo.environment["BREEZE_EXPORT_FORMAT"],
+           ["wav", "mp3", "ogg"].contains(override.lowercased()) {
+            exportFormat = override.lowercased()
+        }
         appendLog("BreezeLocal 已启动")
         appendLog("数据目录：\(dataDir.path)")
         refreshModels()
@@ -414,6 +421,9 @@ final class AppState: ObservableObject {
 
         let voice = voiceOverride ?? selectedVoice
         Task { @MainActor in
+            if ProcessInfo.processInfo.environment["BREEZE_SKIP_SERVICE"] != nil {
+                self.isServiceRunning = true
+            }
             if !self.isServiceRunning {
                 self.appendLog("服务未运行，自动启动…")
                 self.startService()
@@ -495,8 +505,16 @@ final class AppState: ObservableObject {
                     }
                 }
 
-                let url = self.outputURL(for: payloadText)
+                var url = self.outputURL(for: payloadText)
                 try Self.writeWav(pcm: pcm, to: url)
+
+                let format = self.exportFormat.lowercased()
+                if format == "mp3" || format == "ogg" {
+                    if let converted = await self.convertAudio(url, to: format) {
+                        try? FileManager.default.removeItem(at: url)
+                        url = converted
+                    }
+                }
 
                 let elapsed = Date().timeIntervalSince(started)
                 let result = SpeakResult(
@@ -570,7 +588,31 @@ final class AppState: ObservableObject {
             .map { $0 }
     }
 
+    private func convertAudio(_ url: URL, to format: String) async -> URL? {
+        let dst = url.deletingPathExtension().appendingPathExtension(format)
+        let result: Result<String, Error> = await withCheckedContinuation { continuation in
+            runSidecar([
+                "convert", "--in", url.path, "--out", dst.path,
+                "--format", format, "--data-dir", dataDir.path
+            ]) { res in
+                continuation.resume(returning: res)
+            }
+        }
+        switch result {
+        case .success:
+            appendLog("已转为 \(format.uppercased())：\(dst.lastPathComponent)")
+            return dst
+        case .failure(let error):
+            appendLog("转码失败，保留 WAV：\(error.localizedDescription)")
+            return nil
+        }
+    }
+
     func play(_ url: URL) {
+        if url.pathExtension.lowercased() == "ogg" {
+            NSWorkspace.shared.open(url)
+            return
+        }
         do {
             player = try AVAudioPlayer(contentsOf: url)
             player?.prepareToPlay()
