@@ -1,0 +1,32 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+
+      - name: 构建（不签名、不出包）
+        env:
+          BREEZE_APP_VERSION: 0.0.0-ci
+          BREEZE_BUILD_NUMBER: ${{ github.run_number }}
+        run: |
+          unset PYTHONPATH
+          chmod +x scripts/*.sh
+          swift build -c release --disable-sandbox --arch arm64
+          ./scripts/build-sidecar.sh
+          ./scripts/assemble-app.sh 0.0.0-ci "${{ github.run_number }}"
+
+      - name: 冒烟校验
+        run: |
+          chmod +x scripts/*.sh
+          ./scripts/verify-local.sh

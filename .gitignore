@@ -1,0 +1,17 @@
+.build/
+.swiftpm/
+Package.resolved
+*.xcuserstate
+.venv/
+.cache/
+data/
+models/
+logs/
+build/
+dist/
+*.pyc
+__pycache__/
+.DS_Store
+*.dmg
+sidecar/dist/
+sidecar/build/

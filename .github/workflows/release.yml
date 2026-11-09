@@ -1,0 +1,132 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "版本号，例如 0.7.0（不带 v）"
+        required: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  macos:
+    name: macOS DMG
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 解析版本号
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          else
+            VERSION="${GITHUB_REF_NAME#v}"
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+
+      - name: 构建 DMG
+        env:
+          BREEZE_APP_VERSION: ${{ steps.version.outputs.version }}
+          BREEZE_BUILD_NUMBER: ${{ github.run_number }}
+        run: |
+          unset PYTHONPATH
+          chmod +x scripts/*.sh
+          ./scripts/build-local.sh
+
+      - name: 校验产物
+        run: |
+          chmod +x scripts/*.sh
+          ./scripts/verify-local.sh
+
+      - name: 上传产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-dmg
+          path: build/BreezeLocal-${{ steps.version.outputs.version }}.dmg
+          if-no-files-found: error
+
+  windows:
+    name: Windows 准备包
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 解析版本号
+        id: version
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          else
+            VERSION="${GITHUB_REF_NAME#v}"
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: 打包 Windows 准备包
+        shell: pwsh
+        run: |
+          $version = "${{ steps.version.outputs.version }}"
+          $target = "BreezeLocal-Windows-Setup-$version.zip"
+          if (Test-Path $target) { Remove-Item $target }
+          Compress-Archive -Path windows\* -DestinationPath $target -CompressionLevel Optimal
+          Get-Item $target | Select-Object Name, Length
+
+      - name: 上传产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-setup
+          path: BreezeLocal-Windows-Setup-*.zip
+          if-no-files-found: error
+
+  publish:
+    name: 发布 Release
+    needs: [macos, windows]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 解析版本号
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          else
+            VERSION="${GITHUB_REF_NAME#v}"
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+
+      - name: 生成发布说明
+        run: |
+          python3 .github/scripts/release_notes.py "${{ steps.version.outputs.version }}" > notes.md
+          echo "--- notes ---"
+          head -40 notes.md
+
+      - name: 创建 Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.version.outputs.version }}
+          name: BreezeLocal v${{ steps.version.outputs.version }}
+          body_path: notes.md
+          draft: false
+          prerelease: false
+          files: |
+            dist/macos-dmg/*.dmg
+            dist/windows-setup/*.zip
