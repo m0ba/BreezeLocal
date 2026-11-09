@@ -40,6 +40,7 @@ struct BreezeLocalApp: App {
         Snapshot.runIfRequested()
         Snapshot.runSpeakIfRequested()
         Snapshot.runUpdateCheckIfRequested()
+        DispatchQueue.main.async { ServiceBridge.shared.install() }
     }
 
     private var colorScheme: ColorScheme? {

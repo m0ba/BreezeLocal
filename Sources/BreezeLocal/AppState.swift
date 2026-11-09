@@ -109,6 +109,13 @@ final class AppState: ObservableObject {
             )
         }
         loadVoices()
+        NotificationCenter.default.addObserver(
+            forName: NSApplication.willTerminateNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in self?.stopService() }
+        }
         if let override = ProcessInfo.processInfo.environment["BREEZE_EXPORT_FORMAT"],
            ["wav", "mp3", "ogg"].contains(override.lowercased()) {
             exportFormat = override.lowercased()
@@ -311,15 +318,22 @@ final class AppState: ObservableObject {
     func startService() {
         guard serviceProcess == nil else { return }
         guard let model = selectedModel else {
+            traceExternal("startService: no model")
             errorMessage = "请先下载并选择一个模型"
             return
         }
         guard let invocation = sidecarInvocation() else {
+            traceExternal("startService: sidecar missing, bundle=\(Bundle.main.resourceURL?.path ?? "-")")
             errorMessage = "找不到本地推理组件 breeze-sidecar"
             return
         }
-        guard !isPortInUse(mcpPort) else {
-            errorMessage = "端口 \(mcpPort) 已被占用，请在设置里换一个"
+        if isPortInUse(mcpPort) {
+            // 端口已有服务（多半是上次退出残留的 sidecar）：直接复用，发请求失败再报错
+            traceExternal("startService: port \(mcpPort) busy, reuse")
+            isServiceRunning = true
+            isServiceStarting = false
+            statusMessage = "复用 \(mcpPort) 端口上已运行的服务"
+            appendLog("端口 \(mcpPort) 上已有服务，直接复用")
             return
         }
 
@@ -379,6 +393,7 @@ final class AppState: ObservableObject {
                 self.isServiceRunning = self.serviceProcess != nil
             }
         } catch {
+            traceExternal("startService: run failed \(error.localizedDescription)")
             errorMessage = "启动失败：\(error.localizedDescription)"
         }
     }
@@ -411,6 +426,7 @@ final class AppState: ObservableObject {
             return
         }
         guard selectedModel != nil else {
+            traceExternal("generate aborted: no model")
             errorMessage = "请先下载并选择一个模型"
             return
         }
@@ -429,12 +445,13 @@ final class AppState: ObservableObject {
                 self.startService()
                 for _ in 0..<180 {
                     if self.isServiceRunning { break }
-                    if self.serviceProcess == nil { break }
+                    if self.serviceProcess == nil && !self.isServiceStarting { break }
                     try? await Task.sleep(nanoseconds: 500_000_000)
                 }
             }
             guard self.isServiceRunning else {
                 self.isGenerating = false
+                self.traceExternal("generate aborted: service not running")
                 self.errorMessage = "服务没有起来，先点“启动服务”看看日志"
                 completion?(nil)
                 return
@@ -543,8 +560,13 @@ final class AppState: ObservableObject {
                 self.isGenerating = false
                 self.segmentProgress = ""
                 self.generationStatus = "失败"
-                self.errorMessage = error.localizedDescription
-                self.appendLog("合成失败：\(error.localizedDescription)")
+                let message = error.localizedDescription
+                if message.contains("500") {
+                    self.errorMessage = "服务返回 500：端口 \(self.mcpPort) 上可能是上次残留的服务。去设置换个端口，或退出 App 重开一次。"
+                } else {
+                    self.errorMessage = message
+                }
+                self.appendLog("合成失败：\(message)")
                 completion?(nil)
             }
         }
@@ -1183,6 +1205,27 @@ final class AppState: ObservableObject {
         out.appendLE(UInt32(pcm.count))
         out.append(pcm)
         try out.write(to: url)
+    }
+
+    func traceExternal(_ message: String) {
+        let url = URL(fileURLWithPath: "/tmp/breeze-service.log")
+        let line = "[\(Date())] \(message)\n"
+        if let handle = try? FileHandle(forWritingTo: url) {
+            handle.seekToEndOfFile()
+            handle.write(Data(line.utf8))
+            try? handle.close()
+        } else {
+            try? Data(line.utf8).write(to: url)
+        }
+    }
+
+    /// 来自系统服务 / 外部调用的朗读
+    func speakExternal(_ value: String) {
+        let text = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return }
+        traceExternal("speakExternal models=\(models.count) selected=\(selectedModel?.id ?? "nil")")
+        self.text = text
+        generate(textOverride: text)
     }
 
     /// 朗读剪贴板（菜单栏项用）
