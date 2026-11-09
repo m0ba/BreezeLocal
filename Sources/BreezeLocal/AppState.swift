@@ -76,6 +76,10 @@ final class AppState: ObservableObject {
     @Published var exportFormat: String = UserDefaults.standard.string(forKey: "BreezeLocal.exportFormat") ?? "wav" {
         didSet { UserDefaults.standard.set(exportFormat, forKey: "BreezeLocal.exportFormat") }
     }
+    /// MCP / AI 调用时建议使用的格式，会写进「复制给 AI」的交接文本
+    @Published var aiFormat: String = UserDefaults.standard.string(forKey: "BreezeLocal.aiFormat") ?? "wav" {
+        didSet { UserDefaults.standard.set(aiFormat, forKey: "BreezeLocal.aiFormat") }
+    }
     @Published var showVoiceSheet = false
     @Published var showCloneSheet = false
 
@@ -749,6 +753,7 @@ final class AppState: ObservableObject {
         - 当前模型：\(model)
         - 模型路径：\(path)
         - 采样率：24 kHz 单声道
+        - 默认输出格式：\(aiFormat.uppercased())（可在设置里改）
 
         ## Codex 配置（~/.codex/config.toml）
         \(codexConfigText)
@@ -757,9 +762,9 @@ final class AppState: ObservableObject {
         \(jsonConfigText)
 
         ## 可用工具
-        - breeze_speak(text, voice?, instruct?, cfg_scale?)：用本机模型合成语音，返回 WAV 绝对路径。
-        - breeze_design(text, description, cfg_scale?)：用一句自然语言描述创造音色并朗读。
-        - breeze_clone(text, ref_audio, ref_text, instruct?, cfg_scale?)：用本地参考音频（3–30 秒）+ 逐字稿克隆音色。
+        - breeze_speak(text, voice?, instruct?, cfg_scale?, format?)：用本机模型合成语音，返回音频绝对路径；format 可选 wav（默认）/ mp3 / ogg。
+        - breeze_design(text, description, cfg_scale?, format?)：用一句自然语言描述创造音色并朗读。
+        - breeze_clone(text, ref_audio, ref_text, instruct?, cfg_scale?, format?)：用本地参考音频（3–30 秒）+ 逐字稿克隆音色。
         - breeze_status()：查看模型、采样率、内存占用。
 
         ## 使用规则
@@ -767,8 +772,9 @@ final class AppState: ObservableObject {
         2. 中文文本可用 [笑]、[叹气]、[咳嗽]、[清嗓子] 等方括号标记；英文用 (laugh)、(sigh) 等圆括号标记。
         3. 需要特定情绪或语气时，把导演指令写进 instruct（例如“语速放慢，语气克制而严肃”）。
         4. 参考音频必须干净、单人、无背景音乐；ref_text 必须与音频内容逐字一致。
-        5. MCP 生成的音频写在数据目录 outputs 下，只保留最近 5 条（可用环境变量 BREEZE_MCP_KEEP 调整），旧文件自动清理。
-        6. 生成结果只作为素材，商用前请确认 Breeze TTS 2 权重的非商用许可。
+        5. 调用 breeze_speak / breeze_design / breeze_clone 时请传 format="\(aiFormat)"；不传则用 WAV。做语音机器人建议 mp3 或 ogg（体积约为 WAV 的 1/6）。
+        6. MCP 生成的音频写在数据目录 outputs 下，只保留最近 5 条（可用环境变量 BREEZE_MCP_KEEP 调整），旧文件自动清理。
+        7. 生成结果只作为素材，商用前请确认 Breeze TTS 2 权重的非商用许可。
 
         ## 验证方式
         1. 确认服务在跑：/usr/bin/nc -z 127.0.0.1 \(mcpPort)

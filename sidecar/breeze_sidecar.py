@@ -55,6 +55,7 @@ class SpeechRequest(BaseModel):
     max_tokens: int = 1500
     temperature: float = 0.9
     seed: int | None = None
+    format: str = "wav"
 
 
 # --------------------------------------------------------------------------- #
@@ -353,8 +354,8 @@ def import_model(source: str, data_dir: Path, name: str | None) -> None:
     emit({"type": "done", "model": record})
 
 
-def convert_audio(src: Path, dst: Path, fmt: str) -> None:
-    """把 24k 单声道 WAV 转成 mp3 / ogg（依赖 libsndfile 1.2+）。"""
+def encode_file(src: Path, dst: Path, fmt: str) -> None:
+    """把 24k 单声道 WAV 编码成 mp3 / ogg（依赖 libsndfile 1.2+）。"""
     import soundfile as sf
 
     data, sr = sf.read(str(src), dtype="float32", always_2d=False)
@@ -364,8 +365,33 @@ def convert_audio(src: Path, dst: Path, fmt: str) -> None:
     elif fmt == "ogg":
         sf.write(str(dst), data, sr, format="OGG", subtype="VORBIS")
     else:
-        raise fail(f"不支持的格式：{fmt}")
+        raise ValueError(f"不支持的格式：{fmt}")
+
+
+def convert_audio(src: Path, dst: Path, fmt: str) -> None:
+    try:
+        encode_file(src, dst, fmt)
+    except ValueError as exc:
+        raise fail(str(exc)) from exc
     emit({"type": "done", "result": {"path": str(dst), "format": fmt, "bytes": dst.stat().st_size}})
+
+
+def save_output(audio, stem: str, fmt: str, outputs_dir: Path) -> tuple[Path, str]:
+    """写 WAV；如果要求 mp3/ogg 就转码并删掉中间文件。失败时保留 WAV。"""
+    fmt = (fmt or "wav").strip().lower()
+    if fmt not in {"wav", "mp3", "ogg"}:
+        fmt = "wav"
+    wav = outputs_dir / f"{stem}.wav"
+    write_wav(wav, audio)
+    if fmt == "wav":
+        return wav, "wav"
+    target = wav.with_suffix("." + fmt)
+    try:
+        encode_file(wav, target, fmt)
+        wav.unlink(missing_ok=True)
+        return target, fmt
+    except Exception:
+        return wav, "wav"
 
 
 def clean_cache(data_dir: Path) -> None:
@@ -619,33 +645,31 @@ def serve_model(args: argparse.Namespace, data_dir: Path) -> None:
     mcp = FastMCP("BreezeLocal")
 
     @mcp.tool
-    def breeze_speak(text: str, voice: str | None = None, instruct: str | None = None, cfg_scale: float | None = None) -> dict[str, Any]:
-        """Synthesize speech on this Mac and return the absolute path of the WAV file."""
+    def breeze_speak(text: str, voice: str | None = None, instruct: str | None = None, cfg_scale: float | None = None, format: str = "wav") -> dict[str, Any]:
+        """Synthesize speech on this Mac. format: wav (default) / mp3 / ogg. Returns the absolute output path."""
         try:
             result = run_infer(
                 lambda model: synthesize(model, text=text, voice=voice, instruct=instruct, cfg_scale=cfg_scale)
             )
         except BaseException as exc:  # noqa: BLE001
             return {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
-        out = data_dir / "outputs" / f"mcp-{int(time.time()*1000)}.wav"
-        write_wav(out, result.pop("audio"))
+        out, used = save_output(result.pop("audio"), f"mcp-{int(time.time()*1000)}", format, data_dir / "outputs")
         prune_mcp_outputs(data_dir / "outputs")
-        return {"ok": True, "path": str(out), **result}
+        return {"ok": True, "path": str(out), "format": used, **result}
 
     @mcp.tool
-    def breeze_design(text: str, description: str, cfg_scale: float = 4.0) -> dict[str, Any]:
-        """Create a voice from a natural-language description (no reference audio)."""
+    def breeze_design(text: str, description: str, cfg_scale: float = 4.0, format: str = "wav") -> dict[str, Any]:
+        """Create a voice from a natural-language description (no reference audio). format: wav / mp3 / ogg."""
         result = run_infer(
             lambda model: synthesize(model, text=text, instruct=description, cfg_scale=cfg_scale)
         )
-        out = data_dir / "outputs" / f"design-{int(time.time()*1000)}.wav"
-        write_wav(out, result.pop("audio"))
+        out, used = save_output(result.pop("audio"), f"design-{int(time.time()*1000)}", format, data_dir / "outputs")
         prune_mcp_outputs(data_dir / "outputs")
-        return {"ok": True, "path": str(out), **result}
+        return {"ok": True, "path": str(out), "format": used, **result}
 
     @mcp.tool
-    def breeze_clone(text: str, ref_audio: str, ref_text: str, instruct: str | None = None, cfg_scale: float | None = None) -> dict[str, Any]:
-        """Clone a speaker from a local reference WAV and its exact transcript."""
+    def breeze_clone(text: str, ref_audio: str, ref_text: str, instruct: str | None = None, cfg_scale: float | None = None, format: str = "wav") -> dict[str, Any]:
+        """Clone a speaker from a local reference WAV and its exact transcript. format: wav / mp3 / ogg."""
         result = run_infer(
             lambda model: synthesize(
                 model,
@@ -656,10 +680,9 @@ def serve_model(args: argparse.Namespace, data_dir: Path) -> None:
                 cfg_scale=cfg_scale if cfg_scale is not None else 4.0,
             )
         )
-        out = data_dir / "outputs" / f"clone-{int(time.time()*1000)}.wav"
-        write_wav(out, result.pop("audio"))
+        out, used = save_output(result.pop("audio"), f"clone-{int(time.time()*1000)}", format, data_dir / "outputs")
         prune_mcp_outputs(data_dir / "outputs")
-        return {"ok": True, "path": str(out), **result}
+        return {"ok": True, "path": str(out), "format": used, **result}
 
     @mcp.tool
     def breeze_status() -> dict[str, Any]:
@@ -707,14 +730,16 @@ def serve_model(args: argparse.Namespace, data_dir: Path) -> None:
             )
         )
         audio = result.pop("audio")
-        buf = _wav_bytes(audio)
+        fmt = (req.format or "wav").strip().lower()
+        buf, media = _encode_bytes(audio, fmt)
         return Response(
             content=buf,
-            media_type="audio/wav",
+            media_type=media,
             headers={
                 "X-Audio-Duration": str(result["duration"]),
                 "X-Audio-RTF": str(result["rtf"]),
                 "X-Audio-TTFA": str(result["ttfa"]),
+                "X-Audio-Format": fmt if fmt in {"wav", "mp3", "ogg"} else "wav",
             },
         )
 
@@ -747,6 +772,22 @@ def prune_mcp_outputs(outputs_dir: Path, keep: int = MCP_KEEP) -> None:
             old.unlink()
         except OSError:
             pass
+
+
+def _encode_bytes(audio, fmt: str) -> tuple[bytes, str]:
+    import io
+
+    import soundfile as sf
+
+    buf = io.BytesIO()
+    if fmt == "mp3":
+        sf.write(buf, audio, SAMPLE_RATE, format="MP3")
+        return buf.getvalue(), "audio/mpeg"
+    if fmt == "ogg":
+        sf.write(buf, audio, SAMPLE_RATE, format="OGG", subtype="VORBIS")
+        return buf.getvalue(), "audio/ogg"
+    sf.write(buf, audio, SAMPLE_RATE, format="WAV", subtype="PCM_16")
+    return buf.getvalue(), "audio/wav"
 
 
 def _wav_bytes(audio) -> bytes:

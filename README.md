@@ -82,12 +82,12 @@ xattr -cr /Applications/BreezeLocal.app
 
 | 工具 | 用途 |
 | --- | --- |
-| `breeze_speak(text, voice?, instruct?, cfg_scale?)` | 合成语音，返回 WAV 绝对路径 |
-| `breeze_design(text, description)` | 用描述造音色并朗读 |
-| `breeze_clone(text, ref_audio, ref_text, instruct?)` | 用参考音频克隆音色 |
+| `breeze_speak(text, voice?, instruct?, cfg_scale?, format?)` | 合成语音，返回音频路径；`format` = `wav`（默认）/ `mp3` / `ogg` |
+| `breeze_design(text, description, format?)` | 用描述造音色并朗读 |
+| `breeze_clone(text, ref_audio, ref_text, instruct?, format?)` | 用参考音频克隆音色 |
 | `breeze_status()` | 查看模型、采样率、内存占用 |
 
-MCP 生成的音频只保留最近 5 条（`BREEZE_MCP_KEEP` 可调），避免语音机器人把磁盘写满；界面里生成的文件不受影响。
+MCP 生成的音频只保留最近 5 条（`BREEZE_MCP_KEEP` 可调），避免语音机器人把磁盘写满；界面里生成的文件不受影响。做语音机器人建议直接传 `format="mp3"`，体积约为 WAV 的 1/6。
 
 ## 模型与速度
 

@@ -2,6 +2,14 @@
 
 本项目遵循「小步快跑」的版本节奏：功能可用即发版，版本号按 0.x 递增。
 
+## [0.8.3] - 2026-11-09
+
+### 新增
+- MCP 工具 `breeze_speak` / `breeze_design` / `breeze_clone` 支持 `format` 参数：`wav`（默认）/ `mp3` / `ogg`
+- HTTP `/v1/audio/speech` 同样支持 `format`，返回对应 `Content-Type`（`audio/mpeg` / `audio/ogg`）
+- 设置里新增「AI 调用默认格式」，会写进「复制给 AI」的规则（AI 调 MCP 时带上 format）
+- 「复制给 AI」交接文本里补充格式说明与建议（语音机器人用 mp3/ogg）
+
 ## [0.8.2] - 2026-11-09
 
 ### 修复

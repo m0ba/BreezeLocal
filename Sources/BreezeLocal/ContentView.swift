@@ -1322,10 +1322,34 @@ struct SettingsSheet: View {
                     }
                     Spacer()
                 }
-                Text("默认 WAV（无损、可 App 内试听）；MP3 兼容性最好；OGG 体积最小，但 App 内不能试听，会用系统播放器打开。")
+                Text("这里控制界面生成的文件格式。默认 WAV（无损、可试听）；MP3 兼容最好；OGG 最小，App 内不能试听。")
                     .font(.system(size: 9))
                     .foregroundStyle(.tertiary)
                     .fixedSize(horizontal: false, vertical: true)
+
+                HStack(spacing: 6) {
+                    Text("AI 调用默认")
+                        .font(.system(size: 9.5))
+                        .foregroundStyle(.secondary)
+                    ForEach(["wav", "mp3", "ogg"], id: \.self) { format in
+                        Button { state.aiFormat = format } label: {
+                            Text(format.uppercased())
+                                .font(.system(size: 9.5, weight: .medium, design: .monospaced))
+                                .foregroundStyle(state.aiFormat == format ? Color.white : Color.primary)
+                                .padding(.horizontal, 9).frame(height: 21)
+                                .background(
+                                    Capsule().fill(state.aiFormat == format
+                                                   ? AnyShapeStyle(Palette.accentGradient)
+                                                   : AnyShapeStyle(Color.primary.opacity(0.06)))
+                                )
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    Spacer()
+                }
+                Text("会写进「复制给 AI」的规则里，让 AI 调 MCP 时带上 format=\"…\"。")
+                    .font(.system(size: 9))
+                    .foregroundStyle(.tertiary)
             }
 
             section("维护") {
