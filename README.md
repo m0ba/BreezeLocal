@@ -32,6 +32,7 @@
 | **划词朗读** | 可录制的全局快捷键（默认 `⌥⌘R`）+ 剪贴板按钮 + 菜单栏 |
 | **本地接口** | `POST /v1/audio/speech` 返回 24 kHz WAV；附带 `/health` |
 | **MCP 四件套** | `breeze_speak` / `breeze_design` / `breeze_clone` / `breeze_status` |
+| **多模型切换** | 8bit / 4bit / bf16 可同时安装，模型卡「切换」一键换；服务自动重启 |
 | **导出格式** | WAV（默认）/ MP3 / OGG，设置里切换 |
 | **其他** | 浅色 / 深色 / 自动、历史生成、日志导出、缓存清理、检查更新 |
 

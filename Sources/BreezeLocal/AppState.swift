@@ -151,6 +151,11 @@ final class AppState: ObservableObject {
 
     var selectedModel: ModelRecord? { models.first { $0.id == selectedModelID } }
 
+    /// 没有历史选择时，优先 8bit，其次任意
+    static func preferredModelID(in models: [ModelRecord]) -> String? {
+        models.first { $0.id.contains("8bit") }?.id ?? models.first?.id
+    }
+
     var isBusy: Bool { isDownloading || isImporting }
 
     var endpoint: String { "http://127.0.0.1:\(mcpPort)" }
@@ -190,10 +195,33 @@ final class AppState: ObservableObject {
                 } else if let current = self.selectedModelID, self.models.contains(where: { $0.id == current }) {
                     self.selectedModelID = current
                 } else {
-                    self.selectedModelID = self.models.first?.id
+                    self.selectedModelID = Self.preferredModelID(in: self.models)
                 }
             case .failure(let error):
                 self.errorMessage = error.localizedDescription
+            }
+        }
+    }
+
+    /// 切换当前使用的模型；服务在跑就自动重启一次
+    func selectModel(_ id: String) {
+        guard id != selectedModelID else { return }
+        let wasRunning = isServiceRunning || isServiceStarting
+        if wasRunning { stopService() }
+        selectedModelID = id
+        let name = models.first { $0.id == id }?.displayName ?? id
+        statusMessage = "已切换模型：\(name)"
+        appendLog("切换模型 → \(name)")
+        if wasRunning {
+            isServiceStarting = true
+            statusMessage = "正在用 \(name) 重启服务…"
+            Task { @MainActor in
+                // 等旧进程释放端口（最多 6 秒），再按新模型启动
+                for _ in 0..<24 {
+                    if !self.isPortInUse(self.mcpPort) { break }
+                    try? await Task.sleep(nanoseconds: 250_000_000)
+                }
+                self.startService()
             }
         }
     }

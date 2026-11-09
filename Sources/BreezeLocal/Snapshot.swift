@@ -49,6 +49,19 @@ enum Snapshot {
         }
     }
 
+    /// 自测模型切换：BREEZE_SELECT_MODEL=模型 id
+    static func runSelectModelIfRequested() {
+        guard let target = ProcessInfo.processInfo.environment["BREEZE_SELECT_MODEL"] else { return }
+        let state = AppState.shared
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
+            state.selectModel(target)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                print("SELECTED=\(state.selectedModelID ?? "-") status=\(state.statusMessage)")
+                exit(0)
+            }
+        }
+    }
+
     static func runIfRequested() {
         guard let path = ProcessInfo.processInfo.environment["BREEZE_SNAPSHOT"] else { return }
         let which = ProcessInfo.processInfo.environment["BREEZE_SNAPSHOT_VIEW"] ?? "main"
@@ -72,6 +85,8 @@ enum Snapshot {
                 view = AnyView(HistorySheet().environmentObject(state))
             case "about":
                 view = AnyView(AboutSheet().environmentObject(state))
+            case "models":
+                view = AnyView(ModelSwitcherSheet(onAdd: {}).environmentObject(state))
             default:
                 view = AnyView(ContentView().environmentObject(state).frame(width: 380, height: 572))
             }

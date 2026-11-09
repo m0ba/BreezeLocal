@@ -40,6 +40,7 @@ struct BreezeLocalApp: App {
         Snapshot.runIfRequested()
         Snapshot.runSpeakIfRequested()
         Snapshot.runUpdateCheckIfRequested()
+        Snapshot.runSelectModelIfRequested()
         DispatchQueue.main.async { ServiceBridge.shared.install() }
     }
 

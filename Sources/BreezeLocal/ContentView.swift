@@ -358,6 +358,7 @@ private struct SingleLineField: View {
 struct ContentView: View {
     @EnvironmentObject private var state: AppState
     @State private var showAddModel = false
+    @State private var showSwitcher = false
     @State private var showDetail = false
     @State private var showSettings = false
     @State private var showHelp = false
@@ -382,6 +383,13 @@ struct ContentView: View {
         .frame(width: Metrics.windowWidth, height: Metrics.windowHeight, alignment: .top)
         .background(background)
         .sheet(isPresented: $showAddModel) { AddModelSheet().environmentObject(state) }
+        .sheet(isPresented: $showSwitcher) {
+            ModelSwitcherSheet(onAdd: {
+                showSwitcher = false
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { showAddModel = true }
+            })
+            .environmentObject(state)
+        }
         .sheet(isPresented: $showDetail) {
             if let model = state.selectedModel { ModelDetailSheet(model: model).environmentObject(state) }
         }
@@ -681,6 +689,9 @@ struct ContentView: View {
             } else {
                 HStack(spacing: 6) {
                     GhostButton(title: "添加模型", symbol: "plus", height: 24) { showAddModel = true }
+                    GhostButton(title: "切换", symbol: "arrow.left.arrow.right",
+                                enabled: state.models.count > 1, height: 24) { showSwitcher = true }
+                        .help(state.models.count > 1 ? "在已下载的模型之间切换" : "再下载一个模型才能切换")
                     GhostButton(title: state.isChecking ? "测速中…" : "测速", symbol: "speedometer",
                                 enabled: !state.isChecking && state.selectedModel != nil, height: 24) { state.runCheck() }
                     Spacer(minLength: 0)
@@ -1144,6 +1155,117 @@ struct AddModelSheet: View {
         .padding(9)
         .background(RoundedRectangle(cornerRadius: 9).fill(Color.primary.opacity(0.018)))
         .overlay(RoundedRectangle(cornerRadius: 9).stroke(Palette.hairline, lineWidth: 0.7))
+    }
+}
+
+struct ModelSwitcherSheet: View {
+    @EnvironmentObject private var state: AppState
+    @Environment(\.dismiss) private var dismiss
+    var onAdd: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            SheetHeader(
+                title: "切换模型",
+                subtitle: state.models.count > 1
+                    ? "已安装 \(state.models.count) 个；切换后服务会自动重启"
+                    : "只装了一个模型，再下载一个才能切换"
+            )
+
+            if state.models.isEmpty {
+                Text("还没有模型")
+                    .font(.system(size: 11)).foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, minHeight: 80)
+            } else {
+                ForEach(state.models) { model in
+                    row(model)
+                }
+            }
+
+            HStack(spacing: 7) {
+                GhostButton(title: "添加模型", symbol: "plus", height: 26) { onAdd() }
+                Spacer()
+                Text("切换会写入偏好，下次启动沿用")
+                    .font(.system(size: 9)).foregroundStyle(.tertiary)
+            }
+        }
+        .padding(16)
+        .frame(width: 460)
+    }
+
+    private func row(_ model: ModelRecord) -> some View {
+        let selected = model.id == state.selectedModelID
+        return Button {
+            state.selectModel(model.id)
+            dismiss()
+        } label: {
+            HStack(spacing: 9) {
+                ZStack {
+                    Circle()
+                        .fill(selected ? Palette.accentA.opacity(0.14) : Color.primary.opacity(0.05))
+                        .frame(width: 26, height: 26)
+                    Image(systemName: selected ? "checkmark" : "cube.box")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(selected ? Palette.accentA : Color.secondary)
+                }
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 5) {
+                        Text(model.displayName).font(.system(size: 11.5, weight: .medium))
+                        Text(model.quantLabel)
+                            .font(.system(size: 8.5, weight: .semibold))
+                            .padding(.horizontal, 4).padding(.vertical, 1)
+                            .background(Capsule().fill(Palette.accentA.opacity(0.12)))
+                            .foregroundStyle(Palette.accentA)
+                        if selected {
+                            Text("使用中")
+                                .font(.system(size: 8.5, weight: .semibold))
+                                .foregroundStyle(.green)
+                        }
+                    }
+                    Text("\(model.sizeText) · \(channelName(model.channel)) · \(shortDate(model.installedAt))")
+                        .font(.system(size: 9))
+                        .foregroundStyle(.tertiary)
+                }
+                Spacer(minLength: 0)
+                if !selected {
+                    Text("切换")
+                        .font(.system(size: 9.5, weight: .medium))
+                        .foregroundStyle(Palette.accentA)
+                        .padding(.horizontal, 9).padding(.vertical, 3)
+                        .background(Capsule().fill(Palette.accentA.opacity(0.10)))
+                }
+            }
+            .padding(.horizontal, 9)
+            .padding(.vertical, 7)
+            .background(
+                RoundedRectangle(cornerRadius: 9, style: .continuous)
+                    .fill(selected ? Palette.accentA.opacity(0.045) : Color.primary.opacity(0.02))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 9, style: .continuous)
+                    .stroke(selected ? Palette.accentA.opacity(0.4) : Palette.hairline, lineWidth: 0.8)
+            )
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func channelName(_ channel: String?) -> String {
+        switch channel {
+        case "modelscope": return "魔搭"
+        case "mirror": return "HF 镜像"
+        case "local": return "本地导入"
+        case "hf": return "HF 官方"
+        default: return "本机"
+        }
+    }
+
+    private func shortDate(_ raw: String?) -> String {
+        guard let raw else { return "—" }
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let date = formatter.date(from: raw) ?? ISO8601DateFormatter().date(from: raw)
+        guard let date else { return "—" }
+        return date.formatted(date: .abbreviated, time: .omitted)
     }
 }
 
