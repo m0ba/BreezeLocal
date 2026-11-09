@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BreezeLocal Web</title>
+<style>
+  :root{
+    --bg:#f5f6f8; --card:#fff; --text:#1c1c1e; --sub:#6b7280; --line:rgba(0,0,0,.08);
+    --a1:#296fe8; --a2:#19c6b3; --field:#f7f8fa;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{ --bg:#141517; --card:#1d1f22; --text:#f2f3f5; --sub:#9aa1ab; --line:rgba(255,255,255,.1); --field:#23262a;}
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font:14px/1.6 -apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+       min-height:100vh;display:flex;justify-content:center;padding:32px 16px}
+  .wrap{width:100%;max-width:720px}
+  header{display:flex;align-items:center;gap:12px;margin-bottom:20px}
+  .logo{width:42px;height:42px;border-radius:11px;background:linear-gradient(135deg,var(--a1),var(--a2));
+        display:flex;align-items:center;justify-content:center;box-shadow:0 6px 18px rgba(41,111,232,.3)}
+  .logo svg{width:22px;height:22px;fill:#fff}
+  h1{font-size:17px;margin:0}
+  .sub{font-size:12px;color:var(--sub)}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:14px;
+        box-shadow:0 1px 2px rgba(0,0,0,.03)}
+  label{display:block;font-size:12px;color:var(--sub);margin:0 0 6px}
+  textarea,input,select{width:100%;background:var(--field);border:1px solid var(--line);border-radius:9px;
+        color:var(--text);font:inherit;padding:10px 12px;outline:none}
+  textarea{min-height:120px;resize:vertical}
+  textarea:focus,input:focus,select:focus{border-color:var(--a1)}
+  .row{display:flex;gap:10px;margin-top:12px}
+  .row>*{flex:1}
+  button{border:0;border-radius:10px;padding:11px 18px;font:inherit;font-weight:600;cursor:pointer}
+  .primary{background:linear-gradient(135deg,var(--a1),var(--a2));color:#fff}
+  .primary:disabled{opacity:.45;cursor:default}
+  .ghost{background:transparent;color:var(--sub);border:1px solid var(--line)}
+  .meta{display:flex;justify-content:space-between;font-size:12px;color:var(--sub);margin-top:8px}
+  .chips{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+  .chip{font-size:12px;padding:5px 10px;border-radius:999px;background:var(--field);border:1px solid var(--line);
+        color:var(--sub);cursor:pointer}
+  audio{width:100%;margin-top:12px}
+  .status{font-size:12px;color:var(--sub);margin-top:10px;min-height:18px}
+  .status.err{color:#e5484d}
+  .hint{font-size:12px;color:var(--sub);margin-top:10px}
+  code{background:var(--field);padding:1px 5px;border-radius:4px;font-size:12px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="logo"><svg viewBox="0 0 24 24"><path d="M3 10v4h3l4 4V6L6 10H3zm12.5 2a4.5 4.5 0 0 0-2.5-4v8a4.5 4.5 0 0 0 2.5-4zm-2.5-9v2.1A7 7 0 0 1 19 12a7 7 0 0 1-6 6.9V21a9 9 0 0 0 0-18z"/></svg></div>
+    <div>
+      <h1>BreezeLocal Web</h1>
+      <div class="sub">Windows 控制台 · 后端是官方 Breeze TTS 2 API（127.0.0.1:7860）</div>
+    </div>
+  </header>
+
+  <div class="card">
+    <label>要朗读的文字</label>
+    <textarea id="text">你好，这里是 BreezeLocal。所有声音都在这台机器上生成，不会上传到任何服务器。</textarea>
+    <div class="meta"><span id="count">0 字</span><span>中文可用 [笑] [叹气] [咳嗽]</span></div>
+
+    <div class="row">
+      <div>
+        <label>音色描述</label>
+        <select id="voice"></select>
+      </div>
+      <div>
+        <label>导演指令（可选）</label>
+        <input id="instruct" placeholder="例如：语速放慢，语气克制">
+      </div>
+    </div>
+
+    <div class="chips" id="chips">
+      <span class="chip">语速放慢</span><span class="chip">语气温柔</span><span class="chip">压低声音</span><span class="chip">更有激情</span>
+    </div>
+
+    <div class="row">
+      <button class="primary" id="go">生成语音</button>
+      <button class="ghost" id="health">检查后端</button>
+    </div>
+    <div class="status" id="status">点「检查后端」确认 API 是否在跑。</div>
+    <audio id="player" controls hidden></audio>
+  </div>
+
+  <div class="card">
+    <label>怎么用</label>
+    <div class="hint">
+      1. 先在 PowerShell 里运行 <code>start.ps1</code>（它会拉起官方 API 并打开本页）。<br>
+      2. 文本里可以写 <code>[笑]</code>、<code>[叹气]</code> 这类标记。<br>
+      3. 生成的音频是 24 kHz 单声道，浏览器里可直接播放或另存。<br>
+      4. 这是 Web 控制台，不是 macOS 那个原生 App；Windows 没有同款界面。
+    </div>
+  </div>
+</div>
+
+<script>
+const API = "http://127.0.0.1:7860";
+const presets = [
+  ["自然女声","一位二十五六岁的年轻女性，声音干净自然，语气亲切，语速适中。"],
+  ["甜美女生","一位声音甜美的年轻女生，音色明亮偏软，带一点笑意，语速轻快。"],
+  ["初恋女神","一位温柔安静的年轻女性，音色清透，气声偏多，语速偏慢，像在耳边说话。"],
+  ["御姐","一位三十岁左右的成熟女性，音色偏低有磁性，语速从容，语气冷静自信。"],
+  ["磁性男声","一位三十多岁的男性，低音浑厚有磁性，语速偏慢，语气沉稳温和。"],
+  ["帅气男音","一位二十多岁的年轻男性，音色干净利落，语气自信爽朗，语速稍快。"],
+  ["纪录片旁白","纪录片旁白，中低音，平稳克制，语速慢而均匀，句间留白。"],
+  ["深夜电台","深夜电台主持人，声音低而柔，气声明显，语速很慢。"],
+];
+const sel = document.getElementById("voice");
+presets.forEach(([n], i) => sel.add(new Option(n, i)));
+const $ = id => document.getElementById(id);
+const statusEl = $("status");
+const textEl = $("text");
+
+textEl.addEventListener("input", () => $("count").textContent = textEl.value.length + " 字");
+textEl.dispatchEvent(new Event("input"));
+
+document.querySelectorAll(".chip").forEach(c => c.onclick = () => {
+  const v = $("instruct").value.trim();
+  $("instruct").value = v ? v + "，" + c.textContent : c.textContent;
+});
+
+function say(msg, isErr) {
+  statusEl.textContent = msg;
+  statusEl.className = "status" + (isErr ? " err" : "");
+}
+
+$("health").onclick = async () => {
+  say("正在检查…");
+  try {
+    const r = await fetch(API + "/health", { cache: "no-store" });
+    if (r.ok) say("后端就绪 ✓");
+    else if (r.status === 404) say("后端在响应（该版本没有 /health），可以直接生成");
+    else say("后端返回 HTTP " + r.status, true);
+  } catch (e) {
+    say("连不上 " + API + "，先运行 start.ps1", true);
+  }
+};
+
+function wavFromPCM(pcm, sampleRate = 24000) {
+  const header = new ArrayBuffer(44), view = new DataView(header);
+  const writeStr = (off, s) => { for (let i = 0; i < s.length; i++) view.setUint8(off + i, s.charCodeAt(i)); };
+  writeStr(0, "RIFF"); view.setUint32(4, 36 + pcm.byteLength, true); writeStr(8, "WAVE");
+  writeStr(12, "fmt "); view.setUint32(16, 16, true); view.setUint16(20, 1, true);
+  view.setUint16(22, 1, true); view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate * 2, true); view.setUint16(32, 2, true); view.setUint16(34, 16, true);
+  writeStr(36, "data"); view.setUint32(40, pcm.byteLength, true);
+  return new Blob([header, pcm], { type: "audio/wav" });
+}
+
+$("go").onclick = async () => {
+  const text = textEl.value.trim();
+  if (!text) return say("先写点要读的文字", true);
+  const [name, desc] = presets[sel.value];
+  const instruct = [$("instruct").value.trim(), desc].filter(Boolean).join("。");
+  const form = new FormData();
+  form.append("text", text);
+  form.append("instruction", instruct);
+  form.append("cfg_scale", "4");
+
+  $("go").disabled = true;
+  say("生成中…（RTF 大于 1，长文请耐心）");
+  const t0 = performance.now();
+  try {
+    const r = await fetch(API + "/v1/audio/speech", { method: "POST", body: form });
+    if (!r.ok) throw new Error("HTTP " + r.status + " " + (await r.text()).slice(0, 120));
+    const buf = await r.arrayBuffer();
+    const blob = wavFromPCM(buf);
+    const url = URL.createObjectURL(blob);
+    const player = $("player");
+    player.src = url; player.hidden = false; player.play().catch(() => {});
+    const secs = (buf.byteLength / 2 / 24000).toFixed(1);
+    const cost = ((performance.now() - t0) / 1000).toFixed(1);
+    say(`完成 · ${secs} 秒音频 / 用时 ${cost} 秒 · 音色 ${name}`);
+  } catch (e) {
+    say("失败：" + e.message, true);
+  } finally {
+    $("go").disabled = false;
+  }
+};
+</script>
+</body>
+</html>

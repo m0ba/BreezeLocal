@@ -30,6 +30,25 @@ enum Snapshot {
         }
     }
 
+    /// 自测更新检查：BREEZE_CHECK_UPDATE=1
+    static func runUpdateCheckIfRequested() {
+        guard ProcessInfo.processInfo.environment["BREEZE_CHECK_UPDATE"] != nil else { return }
+        let checker = UpdateChecker()
+        let started = Date()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            checker.check()
+            var ticks = 0
+            Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { timer in
+                ticks += 1
+                if case .checking = checker.state, ticks < 60 { return }
+                timer.invalidate()
+                let elapsed = String(format: "%.1f", Date().timeIntervalSince(started))
+                print("UPDATE elapsed=\(elapsed)s state=\(checker.state) latest=\(checker.latestVersion ?? "-") current=\(checker.currentVersion)")
+                exit(0)
+            }
+        }
+    }
+
     static func runIfRequested() {
         guard let path = ProcessInfo.processInfo.environment["BREEZE_SNAPSHOT"] else { return }
         let which = ProcessInfo.processInfo.environment["BREEZE_SNAPSHOT_VIEW"] ?? "main"

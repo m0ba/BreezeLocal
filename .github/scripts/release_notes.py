@@ -35,7 +35,7 @@ def main() -> int:
 | 文件 | 平台 | 说明 |
 | --- | --- | --- |
 | `BreezeLocal-{version}.dmg` | macOS 14+ / Apple Silicon | 拖进「应用程序」即可；未签名，首次打开若被拦，执行 `xattr -cr /Applications/BreezeLocal.app` |
-| `BreezeLocal-Windows-Setup-{version}.zip` | Windows 10/11 | **不是安装程序**：含环境检查、模型下载脚本与三条部署路线说明（本 App 为 macOS 原生，Windows 无同款界面） |
+| `BreezeLocal-Windows-Setup-{version}.zip` | Windows 10/11 | **Web 控制台** + 官方 API 一键启动脚本（需要 NVIDIA 显卡）；不是原生 App 的安装包 |
 
 模型不随包分发，首次打开后在「添加模型」里选 8bit（约 4.6 GB）下载，国内建议走魔搭通道。
 

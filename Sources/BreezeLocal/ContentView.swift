@@ -1209,6 +1209,7 @@ struct SettingsSheet: View {
     @State private var recordingHotKey = false
     @State private var hotKeyMonitor: Any?
     @State private var hotKeyError: String?
+    @StateObject private var updates = UpdateChecker()
 
     private var version: String {
         Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "dev"
@@ -1333,6 +1334,33 @@ struct SettingsSheet: View {
                     .foregroundStyle(.tertiary)
             }
 
+            section("更新") {
+                HStack(spacing: 6) {
+                    Text("当前版本 \(updates.currentVersion)")
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                    Spacer(minLength: 6)
+                    if case .available = updates.state {
+                        PrimaryButton(title: "下载更新", symbol: "arrow.down.circle", width: 104, height: 26) {
+                            updates.downloadAndOpen()
+                        }
+                    }
+                    GhostButton(title: "检查更新", symbol: "arrow.triangle.2.circlepath", height: 26) {
+                        updates.check()
+                    }
+                }
+                HStack(spacing: 5) {
+                    updateStatusView
+                    Spacer(minLength: 0)
+                    if case .available = updates.state {
+                        Button("更新说明") { updates.openReleasePage() }
+                            .buttonStyle(.plain)
+                            .font(.system(size: 9))
+                            .foregroundStyle(Palette.accentA)
+                    }
+                }
+            }
+
             Divider().overlay(Palette.hairline)
 
             HStack(spacing: 8) {
@@ -1349,6 +1377,44 @@ struct SettingsSheet: View {
         .onAppear { port = String(state.mcpPort) }
         .onDisappear { stopRecording() }
         .sheet(isPresented: $showAbout) { AboutSheet().environmentObject(state) }
+    }
+
+    @ViewBuilder
+    private var updateStatusView: some View {
+        switch updates.state {
+        case .idle:
+            Text("从 GitHub Releases 检查新版本")
+                .font(.system(size: 9)).foregroundStyle(.tertiary)
+        case .checking:
+            HStack(spacing: 4) {
+                ProgressView().controlSize(.mini).scaleEffect(0.6)
+                Text("正在检查…").font(.system(size: 9)).foregroundStyle(.secondary)
+            }
+        case .upToDate:
+            Label("已是最新版本", systemImage: "checkmark.circle.fill")
+                .font(.system(size: 9))
+                .foregroundStyle(.green)
+        case .available(let version):
+            Label("发现新版本 v\(version)", systemImage: "sparkles")
+                .font(.system(size: 9, weight: .medium))
+                .foregroundStyle(Palette.accentA)
+        case .downloading:
+            HStack(spacing: 4) {
+                ProgressView().controlSize(.mini).scaleEffect(0.6)
+                Text("正在下载…").font(.system(size: 9)).foregroundStyle(.secondary)
+            }
+        case .downloaded(let path):
+            Label("已下载到 \((path as NSString).lastPathComponent)", systemImage: "checkmark.circle.fill")
+                .font(.system(size: 9))
+                .foregroundStyle(.green)
+                .lineLimit(1)
+                .truncationMode(.middle)
+        case .failed(let message):
+            Label(message, systemImage: "exclamationmark.triangle.fill")
+                .font(.system(size: 9))
+                .foregroundStyle(.orange)
+                .lineLimit(2)
+        }
     }
 
     private var hotKeyHint: String {

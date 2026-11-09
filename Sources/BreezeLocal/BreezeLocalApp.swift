@@ -39,6 +39,7 @@ struct BreezeLocalApp: App {
     init() {
         Snapshot.runIfRequested()
         Snapshot.runSpeakIfRequested()
+        Snapshot.runUpdateCheckIfRequested()
     }
 
     private var colorScheme: ColorScheme? {

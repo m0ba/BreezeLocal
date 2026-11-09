@@ -1,51 +1,61 @@
-# BreezeLocal · Windows 使用说明
+# BreezeLocal Web · Windows
 
-> **重要**：BreezeLocal 是 **macOS 原生 App**（SwiftUI + MLX），Windows 上没有同款界面。
-> 这个包里提供的是「环境检查 + 模型下载 + 部署路线」三件套，帮你在 Windows 上把 Breeze TTS 2 跑起来。
+BreezeLocal 的原生界面是 macOS 专属（SwiftUI + MLX）。这个包给 Windows 提供的是 **Web 控制台 + 官方推理后端**：浏览器里操作，声音在你自己机器上生成。
 
-## 三条路线，按你的显卡选
+> 需要 **NVIDIA 显卡**（官方 eager 推理约 7.7 GB 显存）。没有独显请走文末的 llama.cpp 路线。
 
-| 路线 | 适合 | 显存 / 内存 | 推荐权重 |
-| --- | --- | --- | --- |
-| **ComfyUI**（推荐给做图的） | 已经在用 ComfyUI，想要节点化配音 | 8–12 GB 显存 | `drbaph/Breeze-TTS-2-comfyui` 的 int8-hybrid |
-| **llama.cpp / Breeze-TTS-2.cpp** | 没独显、想轻量跑 | 4 GB 内存起 | `HoppouAI/Breeze-TTS-2.cpp` 的 Q8_0（音质好）或 Q4_K（最省） |
-| **官方 PyTorch** | 要改代码、做研究 | 12 GB 显存（eager） | `BreezeBlue/Breeze-TTS-2` |
+## 快速开始
 
-## 步骤
+1. 装 [Python 3.10+](https://www.python.org/downloads/)（安装时勾选 **Add to PATH**）和 [Git](https://git-scm.com/download/win)
+2. 右键 `start.ps1` → **使用 PowerShell 运行**
+3. 首次会自动：建 `.venv` → 克隆官方仓库 → 装依赖 → 下载 7.7 GB 权重 → 启动 API 和网页
+4. 浏览器打开 `http://127.0.0.1:8787`，点「检查后端」，然后生成
 
-1. 右键 `check-env.ps1` → 使用 PowerShell 运行，确认 Python / 显卡 / 磁盘空间。
-2. 右键 `download-model.ps1` → 使用 PowerShell 运行，按菜单选路线，权重会下到 `.\models`。
-3. 按下面「部署」一节接入。
+> 如果提示脚本被禁止：
+> ```powershell
+> Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+> ```
 
-如果 PowerShell 提示禁止运行脚本，先执行一次：
-
-```powershell
-Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
-```
-
-## 部署
-
-### ComfyUI
-
-1. 装 `ComfyUI-Breeze-TTS-2` 节点包（ComfyUI Manager 里搜 Breeze）。
-2. 把下载的权重放进 `ComfyUI/models/breeze/`（或节点设置里指向 `.\models\...`）。
-3. 参考节点包自带的 workflow，选择 int8-hybrid 权重。
-
-### llama.cpp / Breeze-TTS-2.cpp
-
-1. 拉取 `Breeze-TTS-2.cpp` 项目并按其 README 编译（需要 CMake + MSVC）。
-2. 用下载好的 `*q8_0.gguf` 作为模型参数启动。
-
-### 官方 PyTorch
+## 参数
 
 ```powershell
-git clone https://github.com/breezeblue-ai/breeze-tts.git
-cd breeze-tts
-python -m pip install -r requirements.txt
-python infer.py ..\models\Breeze-TTS-2 --text "你好，这是 Windows 本地的测试。" --output out.wav
+.\start.ps1 -DryRun            # 只检查环境，不启动
+.\start.ps1 -SkipInstall       # 依赖已装好，跳过 pip
+.\start.ps1 -Port 7860 -WebPort 8787
+.\start.ps1 -ModelDir D:\models\Breeze-TTS-2
+.\start.ps1 -NoBrowser
 ```
+
+## 它做了什么
+
+```
+start.ps1
+├─ .venv\                        Python 虚拟环境（不动系统 Python）
+├─ breeze-tts\                   官方仓库（python -m breeze_infer.api）
+├─ ..\models\Breeze-TTS-2\       官方权重（约 7.7 GB）
+└─ web\index.html                控制台（纯静态，浏览器直接开）
+```
+
+控制台调用官方接口 `POST /v1/audio/speech`（multipart：`text` / `instruction` / `cfg_scale`），返回 24 kHz 单声道 PCM，页面里会包成 WAV 播放。
+
+## 没有 NVIDIA 显卡？
+
+用 GGUF + llama.cpp：
+
+```powershell
+# 需要先在 ComfyUI 或 llama.cpp 里加载 Breeze-TTS-2.cpp 的 gguf
+hf download HoppouAI/Breeze-TTS-2.cpp --include "*q8_0.gguf" --local-dir .\models\gguf
+```
+
+或者在 ComfyUI 里装 `ComfyUI-Breeze-TTS-2` 节点，权重用 `drbaph/Breeze-TTS-2-comfyui` 的 int8-hybrid。
+
+## 常见问题
+
+- **生成很慢**：官方 RTF 在消费级显卡上通常 1–3，长文请分段。
+- **CUDA 版本不对**：按官方仓库 `requirements.txt` 装；显存不足时先关掉其他占用显卡的程序。
+- **端口被占用**：`.\start.ps1 -Port 7861 -WebPort 8788`，并改 `web/index.html` 里 `const API = ...`。
+- **模型下载失败**：设 `$env:HF_ENDPOINT="https://hf-mirror.com"` 再运行。
 
 ## 许可
 
-模型权重受 **BreezeBlue Research and Non-Commercial License** 约束，仅限研究与**非商用**。
-商用需向 BreezeBlue / RESONIA 取得书面授权。
+模型权重受 **BreezeBlue Research and Non-Commercial License** 约束，仅限研究与**非商用**。商用需向 BreezeBlue / RESONIA 取得书面授权。
