@@ -16,7 +16,10 @@ def section(version: str) -> str:
     match = pattern.search(text)
     if not match:
         return "_本次没有单独条目，详见提交记录。_\n"
-    return match.group(1).strip() + "\n"
+    body = match.group(1).strip()
+    # 变更条目里的 ### 降一级，避免和发布说明的二级标题打架
+    body = "\n".join(("####" + line[3:]) if line.startswith("### ") else line for line in body.splitlines())
+    return body + "\n"
 
 
 def main() -> int:

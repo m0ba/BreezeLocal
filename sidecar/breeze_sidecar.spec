@@ -48,6 +48,10 @@ def _is_runtime_file(entry):
 
 datas = [item for item in datas if _is_runtime_file(item)]
 binaries = [item for item in binaries if _is_runtime_file(item)]
+hiddenimports = [
+    m for m in hiddenimports
+    if ".tests" not in m and ".test_" not in m and not m.endswith(".test")
+]
 
 a = Analysis(
     ["breeze_sidecar.py"],
@@ -58,7 +62,11 @@ a = Analysis(
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=["torch", "torchaudio", "tensorflow", "jax"],
+    excludes=[
+        "torch", "torchaudio", "tensorflow", "jax",
+        "pytest", "_pytest", "matplotlib", "IPython", "notebook",
+        "tkinter", "PyQt5", "PySide6",
+    ],
     noarchive=False,
 )
 

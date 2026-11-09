@@ -119,6 +119,13 @@ jobs:
           echo "--- notes ---"
           head -40 notes.md
 
+      - name: 生成 SHA256
+        run: |
+          (cd dist && for f in macos-dmg/*.dmg windows-setup/*.zip; do
+             shasum -a 256 "$f" | sed "s|macos-dmg/||; s|windows-setup/||"
+           done) > checksums.txt
+          cat checksums.txt
+
       - name: 创建 Release
         uses: softprops/action-gh-release@v2
         with:
@@ -130,3 +137,4 @@ jobs:
           files: |
             dist/macos-dmg/*.dmg
             dist/windows-setup/*.zip
+            checksums.txt
