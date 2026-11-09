@@ -1,10 +1,62 @@
 # BreezeLocal
 
+<p align="center">
+  <img src="docs/ui-main.png" width="360" alt="BreezeLocal 主界面">
+</p>
+
+<p align="center">
+  <a href="https://github.com/m0ba/BreezeLocal/releases/latest"><img alt="release" src="https://img.shields.io/github/v/release/m0ba/BreezeLocal?color=blue"></a>
+  <img alt="platform" src="https://img.shields.io/badge/macOS-14%2B%20Apple%20Silicon-black">
+  <img alt="license" src="https://img.shields.io/badge/code-MIT-green">
+  <img alt="weights" src="https://img.shields.io/badge/weights-non--commercial-orange">
+</p>
+
 在 Apple Silicon Mac 上本地跑 **Breeze TTS 2** 的原生 macOS App：模型下载与管理、文字转语音、声音设计、声音克隆、本地 MCP 服务，全部在这台机器上完成。
 
-界面与工程结构参照 `Laya Local`（SwiftUI 外壳 + PyInstaller 打包的 Python sidecar），区别是推理层换成 `mlx-audio` + Breeze TTS 2 的 MLX 权重。
-
 > ⚠️ **许可**：Breeze TTS 2 权重受 *BreezeBlue Research and Non-Commercial License* 约束，**仅限研究与非商用**。App 不内置权重，由用户自行下载；商用需向 RESONA / BreezeBlue 取得书面授权。
+
+## 下载
+
+| 平台 | 产物 | 说明 |
+| --- | --- | --- |
+| macOS 14+ / Apple Silicon | `BreezeLocal-<版本>.dmg` | 拖进「应用程序」即可。未签名/未公证，首次打开若被 Gatekeeper 拦，执行下面的命令 |
+| Windows 10/11 | `BreezeLocal-Windows-Setup-<版本>.zip` | **不是安装程序**：含环境检查、模型下载脚本与 ComfyUI / llama.cpp / PyTorch 三条部署说明（本 App 是 macOS 原生，Windows 没有同款界面） |
+
+```bash
+xattr -cr /Applications/BreezeLocal.app
+```
+
+所有产物在 [Releases](https://github.com/m0ba/BreezeLocal/releases) 自动构建发布（tag `v*` 触发）。
+
+## 功能
+
+- **模型管理**：魔搭 / HF 镜像 / HF 官方三通道下载，支持导入本地目录、切换、卸载、测速
+- **15 个音色预设**：甜美女生、初恋女神、御姐、磁性男声、纪录片旁白…每个可先试听再选用
+- **声音设计 / 录音克隆**：一句描述造音色；3–30 秒录音 + 逐字稿复刻
+- **长文分段**：按标点切句、段间 0.28 秒静音、显示「第 3/4 段」
+- **划词朗读**：可录制的全局快捷键（默认 `⌥⌘R`）+「朗读剪贴板」按钮 + 菜单栏
+- **本地服务**：`/v1/audio/speech` 兼容 OpenAI 风格；MCP 四件套给 Codex / Claude / Cursor 调用
+- **浅色 / 深色 / 自动**；历史生成、日志导出、缓存清理
+
+## 四步上手
+
+1. 打开 App →「添加模型」→ 选 8bit（4.6 GB），国内点「魔搭」
+2. 点「启动服务」，等状态变绿（首次加载模型 10–30 秒）
+3. 写文字、选音色、按 `⌘↩` 生成；长文会自动分段
+4. 底部「复制给 AI」，把 MCP 配置和使用规则一次性粘给 AI 客户端
+
+## 架构
+
+```
+BreezeLocal.app
+├── Contents/MacOS/BreezeLocal          SwiftUI 外壳（macOS 14+，arm64）
+└── Contents/Resources/breeze-sidecar   PyInstaller 打包的 Python 运行时
+                                        ├─ mlx-audio + MLX：本地推理
+                                        ├─ FastAPI：/health、/v1/audio/speech
+                                        └─ FastMCP：breeze_speak / design / clone / status
+```
+
+数据全部隔离在 `~/Library/Application Support/BreezeLocal/`（models / outputs / voices / cache / logs）。
 
 ## 目录
 
